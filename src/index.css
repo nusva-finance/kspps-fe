@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --navy: #0A1628;
+  --navy-light: #0d1e35;
+  --cyan: #1ECAD3;
+  --teal: #0FA3B1;
+  --ink: #0A3D62; /* Warna teks utama untuk area terang */
+  --ink-light: #5a7a8a;
+}
+
+@layer base {
+  body {
+    @apply antialiased bg-[#F0F4F8];
+    color: var(--ink);
+  }
+}
+
+/* Scrollbar tipis seperti di template */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+/* Card style yang sesuai dengan 59.png (Putih Bersih) */
+.glass-card-clean {
+  @apply bg-white border border-[#e8f0f4] shadow-sm rounded-[14px];
+}
