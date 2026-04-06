@@ -14,7 +14,7 @@ export default defineConfig({
     proxy: {
       '/api': {
         //target: 'http://localhost:8080',
-        target : 'https://relay-antonio-effectively-involves.trycloudflare.com',
+        target : 'https://married-same-runs-ruth.trycloudflare.com',
         changeOrigin: true,
       },
     },

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Save, Wallet, DollarSign, User as UserIcon, Search, X, CreditCard } from 'lucide-react'
+import { useNavigate, useParams } from 'react-router-dom'
+import { ArrowLeft, Save, Wallet, User as UserIcon, Search, X, CreditCard, Loader2 } from 'lucide-react'
 import Button from '../../components/ui/Button'
 import memberService from '../../services/memberService'
 import savingsService from '../../services/savingsService'
@@ -25,7 +25,7 @@ interface Rekening {
 }
 
 interface SavingsFormData {
-  account_type: 'pokok' | 'wajib' | 'modal'
+  account_type: string
   member_id: string
   member_name: string
   transaction_type: 'credit' | 'debit'
@@ -39,10 +39,13 @@ const ACCOUNT_TYPES = [
   { value: 'pokok', label: 'Simpanan Pokok', minAmount: 500000 },
   { value: 'wajib', label: 'Simpanan Wajib', minAmount: 2500000 },
   { value: 'modal', label: 'Simpanan Modal', minAmount: 100000 },
+  { value: 'manasuka', label: 'Simpanan Manasuka', minAmount: 10000 },
 ]
 
-const SavingsForm = () => {
+const SimpananForm = () => {
   const navigate = useNavigate()
+  const { id } = useParams()
+  const isEdit = !!id
 
   // --- State Management ---
   const [members, setMembers] = useState<Member[]>([])
@@ -51,7 +54,7 @@ const SavingsForm = () => {
   const [showMemberDropdown, setShowMemberDropdown] = useState(false)
   const [isLoadingMembers, setIsLoadingMembers] = useState(false)
   const [selectedMember, setSelectedMember] = useState<Member | null>(null)
-  
+
   const [formData, setFormData] = useState<SavingsFormData>({
     account_type: 'pokok',
     member_id: '',
@@ -63,8 +66,9 @@ const SavingsForm = () => {
     rekening_id: null,
   })
 
-  const [errors, setErrors] = useState<Partial<SavingsFormData>>({})
+  const [errors, setErrors] = useState<Partial<Record<keyof SavingsFormData, string>>>({})
   const [isLoading, setIsLoading] = useState(false)
+  const [isInitialLoading, setIsInitialLoading] = useState(false)
 
   // --- State untuk Rekening ---
   const [rekenings, setRekenings] = useState<Rekening[]>([])
@@ -79,11 +83,10 @@ const SavingsForm = () => {
     const loadMembers = async () => {
       setIsLoadingMembers(true)
       try {
-        // Mengambil data anggota (limit 1000 untuk pencarian lokal)
         const response = await memberService.getMembers(1, 1000, '')
         setMembers(response.data || [])
       } catch (error: any) {
-        console.error('❌ Error loading members:', error)
+        console.error('Error loading members:', error)
       } finally {
         setIsLoadingMembers(false)
       }
@@ -97,17 +100,78 @@ const SavingsForm = () => {
       setIsLoadingRekenings(true)
       try {
         const response = await rekeningService.getRekenings(1, 1000, '')
-        // Filter hanya rekening yang aktif
         const activeRekenings = (response.data || []).filter(r => r.aktif)
         setRekenings(activeRekenings)
       } catch (error: any) {
-        console.error('❌ Error loading rekenings:', error)
+        console.error('Error loading rekenings:', error)
       } finally {
         setIsLoadingRekenings(false)
       }
     }
     loadRekenings()
   }, [])
+
+  // --- Load existing transaction data for edit mode ---
+  useEffect(() => {
+    const loadTransaction = async () => {
+      if (!isEdit || !id) return
+
+      setIsInitialLoading(true)
+      try {
+        const response = await savingsService.getTransactionById(parseInt(id))
+        const transaction = response.data || response
+
+        setFormData({
+          account_type: transaction.account_type || 'pokok',
+          member_id: String(transaction.member_id),
+          member_name: transaction.member_name || '',
+          transaction_type: transaction.transaction_type || 'credit',
+          amount: transaction.amount || 0,
+          description: transaction.description || '',
+          transaction_date: transaction.transaction_date ? transaction.transaction_date.split('T')[0] : new Date().toISOString().split('T')[0],
+          rekening_id: transaction.rekening_id || null,
+        })
+
+        // Set selected member if data available
+        if (transaction.member_id && transaction.member_name) {
+          setSelectedMember({
+            id: transaction.member_id,
+            member_no: transaction.member_no || '',
+            full_name: transaction.member_name,
+            ktp_no: '',
+            phone_number: '',
+          })
+        }
+
+        // Set selected rekening if data available
+        if (transaction.rekening_id) {
+          const rekening = rekenings.find(r => r.id === transaction.rekening_id)
+          if (rekening) {
+            setSelectedRekening(rekening)
+          } else {
+            // If rekening not found in loaded list, try to set from transaction data
+            setSelectedRekening({
+              id: transaction.rekening_id,
+              namarekening: transaction.rekening_name || '',
+              norekening: transaction.rekening_no || '',
+              aktif: true,
+            })
+          }
+        }
+      } catch (error) {
+        console.error('Error loading transaction:', error)
+        alert('Gagal memuat data transaksi')
+        navigate('/simpanan')
+      } finally {
+        setIsInitialLoading(false)
+      }
+    }
+
+    // Only load transaction after rekenings are loaded
+    if (rekenings.length > 0 || !isLoadingRekenings) {
+      loadTransaction()
+    }
+  }, [id, isEdit, rekenings, isLoadingRekenings])
 
   // --- Filter Pencarian Anggota ---
   useEffect(() => {
@@ -163,23 +227,42 @@ const SavingsForm = () => {
 
     setIsLoading(true)
     try {
-      console.log('📤 Creating savings transaction:', formData)
-      await savingsService.createTransaction(formData)
+      const submitData = {
+        ...formData,
+        rekening_id: selectedRekening?.id || null,
+      }
 
-      console.log('✅ Transaction created successfully')
-      navigate('/savings', {
+      if (isEdit && id) {
+        console.log('Updating transaction:', id, submitData)
+        await savingsService.updateTransaction(parseInt(id), submitData)
+        console.log('Transaction updated successfully')
+      } else {
+        console.log('Creating transaction:', submitData)
+        await savingsService.createTransaction(submitData)
+        console.log('Transaction created successfully')
+      }
+
+      navigate('/simpanan', {
         state: {
           notification: {
-            message: 'Transaksi simpanan berhasil ditambahkan!',
+            message: isEdit ? 'Transaksi berhasil diperbarui!' : 'Transaksi berhasil ditambahkan!',
             type: 'success',
           },
         },
       })
     } catch (error: unknown) {
       setIsLoading(false)
-      console.error('❌ Error saving transaction:', error)
+      console.error('Error saving transaction:', error)
       alert('Gagal menyimpan transaksi. Silakan coba lagi.')
     }
+  }
+
+  if (isInitialLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 text-cyan animate-spin" />
+      </div>
+    )
   }
 
   return (
@@ -187,20 +270,24 @@ const SavingsForm = () => {
       {/* Page Header */}
       <div className="flex items-center gap-4 mb-6">
         <button
-          onClick={() => navigate('/savings')}
+          onClick={() => navigate('/simpanan')}
           className="flex items-center justify-center w-10 h-10 rounded-lg border border-cyan/20 hover:bg-cyan/5 transition-colors"
         >
           <ArrowLeft className="w-5 h-5 text-navy" />
         </button>
         <div>
-          <h1 className="font-serif text-2xl font-bold text-navy">Transaksi Simpanan Baru</h1>
-          <p className="text-sm text-gray">Buat transaksi setoran atau penarikan simpanan</p>
+          <h1 className="font-serif text-2xl font-bold text-navy">
+            {isEdit ? 'Edit Transaksi Simpanan' : 'Transaksi Simpanan Baru'}
+          </h1>
+          <p className="text-sm text-gray">
+            {isEdit ? 'Perbarui data transaksi simpanan' : 'Buat transaksi setoran atau penarikan simpanan'}
+          </p>
         </div>
       </div>
 
       <form onSubmit={handleSubmit}>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          
+
           <div className="lg:col-span-2 space-y-6">
             {/* Pilih Anggota */}
             <div className="bg-white rounded-xl border border-cyan/20 p-6 shadow-sm">
@@ -231,7 +318,7 @@ const SavingsForm = () => {
                   />
                   <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray" />
                   {memberSearch && (
-                    <button 
+                    <button
                       type="button"
                       onClick={() => setMemberSearch('')}
                       className="absolute right-3 top-2.5"
@@ -262,7 +349,7 @@ const SavingsForm = () => {
                           className="w-full px-4 py-3 hover:bg-cyan/5 text-left border-b border-gray-50 last:border-0"
                         >
                           <div className="font-medium text-navy text-sm">{member.full_name}</div>
-                          <div className="text-xs text-gray">No. {member.member_no} • {member.phone_number}</div>
+                          <div className="text-xs text-gray">No. {member.member_no} - {member.phone_number}</div>
                         </button>
                       ))
                     )}
@@ -276,8 +363,8 @@ const SavingsForm = () => {
                       <div className="text-xs text-emerald-700 font-medium">Anggota Terpilih:</div>
                       <div className="text-sm font-bold text-navy">{selectedMember.full_name} ({selectedMember.member_no})</div>
                     </div>
-                    <button 
-                      type="button" 
+                    <button
+                      type="button"
                       onClick={() => {
                         setSelectedMember(null)
                         setFormData({ ...formData, member_id: '', member_name: '' })
@@ -306,7 +393,7 @@ const SavingsForm = () => {
                   <label className="block text-xs font-medium text-navy mb-2">Jenis Simpanan</label>
                   <select
                     value={formData.account_type}
-                    onChange={(e) => setFormData({ ...formData, account_type: e.target.value as any })}
+                    onChange={(e) => setFormData({ ...formData, account_type: e.target.value })}
                     className="w-full px-3 py-2 border border-cyan/30 rounded-lg text-sm outline-none focus:ring-2 focus:ring-cyan/30"
                   >
                     {ACCOUNT_TYPES.map(type => (
@@ -432,7 +519,6 @@ const SavingsForm = () => {
                       type="text"
                       value={formData.amount > 0 ? formData.amount.toLocaleString('id-ID') : ''}
                       onChange={(e) => {
-                        // Remove non-numeric characters except comma/period for thousands separator
                         const value = e.target.value.replace(/[^0-9]/g, '')
                         const numValue = parseInt(value) || 0
                         setFormData({ ...formData, amount: numValue })
@@ -526,13 +612,13 @@ const SavingsForm = () => {
                   disabled={isLoading}
                 >
                   <Save className="w-4 h-4" />
-                  {isLoading ? 'Memproses...' : 'Simpan Transaksi'}
+                  {isLoading ? 'Memproses...' : isEdit ? 'Simpan Perubahan' : 'Simpan Transaksi'}
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
                   className="w-full py-3"
-                  onClick={() => navigate('/savings')}
+                  onClick={() => navigate('/simpanan')}
                 >
                   Batal
                 </Button>
@@ -546,4 +632,4 @@ const SavingsForm = () => {
   )
 }
 
-export default SavingsForm
+export default SimpananForm

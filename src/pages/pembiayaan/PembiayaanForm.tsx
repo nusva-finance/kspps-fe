@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { ArrowLeft, Save, Wallet, Calculator, Calendar, Percent, Search, X, ChevronDown } from 'lucide-react'
 import Button from '../../components/ui/Button'
 import Modal from '../../components/ui/Modal'
@@ -7,6 +7,7 @@ import { useModal } from '../../hooks/useModal'
 import pembiayaanService, { type Pembiayaan, type CreatePembiayaanRequest, type UpdatePembiayaanRequest } from '../../services/pembiayaanService'
 import memberService from '../../services/memberService'
 import kategoriBarangService from '../../services/kategoriBarangService'
+import rekeningService, { type Rekening } from '../../services/rekeningService'
 import type { Member } from '../../services/memberService'
 import type { KategoriBarang } from '../../services/kategoriBarangService'
 
@@ -16,15 +17,21 @@ interface PembiayaanFormData {
   tanggalpinjaman: string
   kategoribarang: string
   tenor: number
-  nominalpinjaman: number
+  nominalpembelian: number
+  idnusvarekening: number
 }
 
 const TENOR_OPTIONS = [3, 6, 12, 18, 24, 30, 36, 48, 60]
 
 const PembiayaanForm = () => {
   const navigate = useNavigate()
+  const location = useLocation()
   const { id } = useParams()
-  const isEdit = !!id
+
+  // Detect mode from pathname
+  const isView = location.pathname.endsWith('/view')
+  const isEdit = !!id && location.pathname.endsWith('/edit')
+
   const { modal, showSuccess, closeModal } = useModal()
   const dropdownRef = useRef<HTMLDivElement>(null)
 
@@ -34,13 +41,15 @@ const PembiayaanForm = () => {
     tanggalpinjaman: new Date().toISOString().split('T')[0],
     kategoribarang: '',
     tenor: 12,
-    nominalpinjaman: 0,
+    nominalpembelian: 0,
+    idnusvarekening: 0,
   })
 
   const [errors, setErrors] = useState<Partial<PembiayaanFormData>>({})
   const [isLoading, setIsLoading] = useState(false)
   const [members, setMembers] = useState<Member[]>([])
   const [kategoriBarangList, setKategoriBarangList] = useState<KategoriBarang[]>([])
+  const [rekeningList, setRekeningList] = useState<Rekening[]>([])
   const [calculatedMargin, setCalculatedMargin] = useState<number | null>(null)
   const [isCalculating, setIsCalculating] = useState(false)
 
@@ -48,6 +57,12 @@ const PembiayaanForm = () => {
   const [memberDropdownOpen, setMemberDropdownOpen] = useState(false)
   const [memberSearchTerm, setMemberSearchTerm] = useState('')
   const [filteredMembers, setFilteredMembers] = useState<Member[]>([])
+
+  // State untuk searchable dropdown rekening
+  const [rekeningDropdownOpen, setRekeningDropdownOpen] = useState(false)
+  const [rekeningSearchTerm, setRekeningSearchTerm] = useState('')
+  const [filteredRekenings, setFilteredRekenings] = useState<Rekening[]>([])
+  const rekeningDropdownRef = useRef<HTMLDivElement>(null)
 
   const loadMembers = async () => {
     try {
@@ -69,10 +84,24 @@ const PembiayaanForm = () => {
     }
   }
 
-  // Load data jika mode edit
+  const loadRekenings = async () => {
+    try {
+      const response = await rekeningService.getRekenings(1, 1000, '')
+      // ✅ PERBAIKAN: Ambil array dari dalam properti 'data' jika ada
+      const rawData = response.data?.data || response.data || response || []
+      
+      // Tambahkan Log ini untuk cek di F12 browser
+      console.log('📦 Data Rekening Diterima:', rawData) 
+      
+      setRekeningList(Array.isArray(rawData) ? rawData : [])
+    } catch (error) {
+      console.error('Gagal memuat data rekening:', error)
+    }
+  }
+  // Load data jika mode edit atau view
   useEffect(() => {
     const loadPembiayaanForEdit = async () => {
-      if (isEdit && id) {
+      if ((isEdit || isView) && id) {
         try {
           console.log('📥 Loading pembiayaan data for edit, ID:', id)
           const response = await pembiayaanService.getPembiayaanById(parseInt(id))
@@ -86,7 +115,8 @@ const PembiayaanForm = () => {
               tanggalpinjaman: data.tanggalpinjaman ? data.tanggalpinjaman.split('T')[0] : new Date().toISOString().split('T')[0],
               kategoribarang: data.kategoribarang || '',
               tenor: data.tenor || 12,
-              nominalpinjaman: data.nominalpinjaman || 0,
+              nominalpembelian: data.nominalpembelian || 0,
+              idnusvarekening: data.idnusvarekening || 0,
             })
             setCalculatedMargin(data.margin || null)
             console.log('✅ Form data set successfully')
@@ -99,12 +129,13 @@ const PembiayaanForm = () => {
     }
 
     loadPembiayaanForEdit()
-  }, [id, isEdit])
+  }, [id, isEdit, isView])
 
   // Load dropdown data
   useEffect(() => {
     loadMembers()
     loadKategoriBarang()
+    loadRekenings()
   }, [])
 
   // Handle click outside to close dropdown
@@ -112,6 +143,9 @@ const PembiayaanForm = () => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setMemberDropdownOpen(false)
+      }
+      if (rekeningDropdownRef.current && !rekeningDropdownRef.current.contains(event.target as Node)) {
+        setRekeningDropdownOpen(false)
       }
     }
 
@@ -132,6 +166,42 @@ const PembiayaanForm = () => {
       setFilteredMembers(members.slice(0, 20)) // Show first 20 when no search
     }
   }, [memberSearchTerm, members])
+
+
+  useEffect(() => {
+    // 1. Sinkronisasi Nama Rekening saat Edit atau View
+    if ((isEdit || isView) && formData.idnusvarekening > 0 && rekeningList.length > 0) {
+      const rek = rekeningList.find(r => r.id === formData.idnusvarekening);
+      if (rek) {
+        const label = `${rek.norekening} - ${rek.namarekening}`;
+        if (rekeningSearchTerm !== label) setRekeningSearchTerm(label);
+      }
+    }
+
+    // 2. Sinkronisasi Nama Anggota saat Edit atau View
+    if ((isEdit || isView) && formData.idmember > 0 && members.length > 0) {
+      const mem = members.find(m => m.id === formData.idmember);
+      if (mem) {
+        const label = `${mem.member_no} - ${mem.full_name}`;
+        if (memberSearchTerm !== label) setMemberSearchTerm(label);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEdit, isView, formData.idnusvarekening, formData.idmember, rekeningList, members]);
+
+  useEffect(() => {
+    if (rekeningSearchTerm) {
+      const searchTerm = rekeningSearchTerm.toLowerCase()
+      const filtered = rekeningList.filter((rekening) =>
+        rekening.norekening?.toLowerCase().includes(searchTerm) ||
+        rekening.namarekening?.toLowerCase().includes(searchTerm)
+      )
+      setFilteredRekenings(filtered.slice(0, 20)) // Ambil 20 hasil pertama
+    } else {
+      // Jika kolom pencarian kosong, tampilkan semua (maks 20)
+      setFilteredRekenings(rekeningList.slice(0, 20))
+    }
+  }, [rekeningSearchTerm, rekeningList])
 
   // Calculate margin when category or tenor changes
   useEffect(() => {
@@ -180,6 +250,28 @@ const PembiayaanForm = () => {
     return members.find(m => m.id === formData.idmember)
   }
 
+  // Handler untuk rekening search dropdown
+  const handleRekeningSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const searchTerm = e.target.value
+    setRekeningSearchTerm(searchTerm)
+    setRekeningDropdownOpen(true)
+  }
+
+  const handleRekeningSelect = (rekening: Rekening) => {
+    setFormData({ ...formData, idnusvarekening: rekening.id || 0 })
+    setRekeningSearchTerm(`${rekening.norekening} - ${rekening.namarekening}`)
+    setRekeningDropdownOpen(false)
+  }
+
+  const clearRekeningSelection = () => {
+    setFormData({ ...formData, idnusvarekening: 0 })
+    setRekeningSearchTerm('')
+  }
+
+  const getSelectedRekening = () => {
+    return rekeningList.find(r => r.id === formData.idnusvarekening)
+  }
+
   const validate = () => {
     const newErrors: any = {}
     if (!formData.idmember) newErrors.idmember = 'Anggota wajib dipilih'
@@ -187,7 +279,8 @@ const PembiayaanForm = () => {
     if (!formData.tanggalpinjaman.trim()) newErrors.tanggalpinjaman = 'Tanggal pinjaman wajib diisi'
     if (!formData.kategoribarang.trim()) newErrors.kategoribarang = 'Kategori barang wajib dipilih'
     if (formData.tenor <= 0) newErrors.tenor = 'Tenor wajib diisi'
-    if (formData.nominalpinjaman <= 0) newErrors.nominalpinjaman = 'Nominal pinjaman wajib diisi dan lebih dari 0'
+    if (formData.nominalpembelian <= 0) newErrors.nominalpembelian = 'Nominal pembelian wajib diisi dan lebih dari 0'
+    if (!formData.idnusvarekening) newErrors.idnusvarekening = 'Nusva Rekening wajib dipilih'
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -207,7 +300,8 @@ const PembiayaanForm = () => {
         tanggalpinjaman: formData.tanggalpinjaman,
         kategoribarang: formData.kategoribarang,
         tenor: formData.tenor,
-        nominalpinjaman: formData.nominalpinjaman,
+        nominalpembelian: formData.nominalpembelian,
+        idnusvarekening: formData.idnusvarekening,
       }
 
       if (isEdit && id) {
@@ -242,13 +336,12 @@ const PembiayaanForm = () => {
   }
 
   const calculateNominalPembelian = () => {
-    if (calculatedMargin !== null && formData.nominalpinjaman > 0) {
-      // Hitung margin dalam nilai (persentase / 100)
+    if (calculatedMargin !== null && formData.nominalpembelian > 0) {
+      // Hitung nominal pembiayaan (Nominal Pembelian + Margin)
       const marginValue = calculatedMargin / 100
-      // Hitung total pembelian
-      const totalPembelian = formData.nominalpinjaman + (formData.nominalpinjaman * marginValue)
+      const nominalPembiayaan = formData.nominalpembelian + (formData.nominalpembelian * marginValue)
       // Bulatkan ke atas ke kelipatan 10.000
-      return Math.ceil(totalPembelian / 10000) * 10000
+      return Math.ceil(nominalPembiayaan / 10000) * 10000
     }
     return 0
   }
@@ -286,7 +379,7 @@ const PembiayaanForm = () => {
           </button>
           <div>
             <h1 className="text-xl font-bold text-[#0A3D62] font-fraunces">
-              {isEdit ? 'Edit Pembiayaan' : 'Tambah Pembiayaan Baru'}
+              {isView ? 'Lihat Detail Pembiayaan' : isEdit ? 'Edit Pembiayaan' : 'Tambah Pembiayaan Baru'}
             </h1>
             <p className="text-[11px] text-[#96b0bc] font-bold uppercase tracking-widest">
               Data Pinjaman Anggota
@@ -314,15 +407,16 @@ const PembiayaanForm = () => {
                       type="text"
                       value={memberSearchTerm || (getSelectedMember() ? `${getSelectedMember()?.member_no} - ${getSelectedMember()?.full_name}` : '')}
                       onChange={handleMemberSearch}
-                      onFocus={() => setMemberDropdownOpen(true)}
-                      onClick={() => setMemberDropdownOpen(true)}
+                      onFocus={() => !isView && setMemberDropdownOpen(true)}
+                      onClick={() => !isView && setMemberDropdownOpen(true)}
                       placeholder="Ketik untuk mencari anggota..."
+                      disabled={isView}
                       className={`w-full pl-10 pr-10 py-3 bg-[#F0F4F8] border rounded-xl text-sm font-medium outline-none focus:bg-white focus:border-cyan/40 transition-all ${
                         errors.idmember ? 'border-red-400' : 'border-[#e2e8f0]'
-                      } ${memberDropdownOpen ? 'border-cyan/40 bg-white' : ''}`}
+                      } ${memberDropdownOpen ? 'border-cyan/40 bg-white' : ''} ${isView ? 'cursor-not-allowed bg-gray-100' : ''}`}
                     />
                     {/* Clear Button */}
-                    {formData.idmember > 0 && (
+                    {formData.idmember > 0 && !isView && (
                       <button
                         type="button"
                         onClick={clearMemberSelection}
@@ -402,7 +496,90 @@ const PembiayaanForm = () => {
               </div>
             </div>
 
-            {/* Baris 2: Tanggal Pinjaman & Tenor */}
+            {/* Baris 2: Nusva Rekening */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Nusva Rekening - Searchable Dropdown */}
+              <div className="space-y-2 md:col-span-2" ref={rekeningDropdownRef}>
+                <label className="block text-[11px] font-bold uppercase tracking-widest text-[#5a7a8a]">
+                  Nusva Rekening <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  {/* Search Input */}
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#96b0bc] pointer-events-none" />
+                    <input
+                      type="text"
+                      value={rekeningSearchTerm || (getSelectedRekening() ? `${getSelectedRekening()?.norekening} - ${getSelectedRekening()?.namarekening}` : '')}
+                      onChange={handleRekeningSearch}
+                      onFocus={() => !isView && setRekeningDropdownOpen(true)}
+                      onClick={() => !isView && setRekeningDropdownOpen(true)}
+                      placeholder="Ketik untuk mencari rekening..."
+                      disabled={isView}
+                      className={`w-full pl-10 pr-10 py-3 bg-[#F0F4F8] border rounded-xl text-sm font-medium outline-none focus:bg-white focus:border-cyan/40 transition-all ${
+                        errors.idnusvarekening ? 'border-red-400' : 'border-[#e2e8f0]'
+                      } ${rekeningDropdownOpen ? 'border-cyan/40 bg-white' : ''} ${isView ? 'cursor-not-allowed bg-gray-100' : ''}`}
+                    />
+                    {/* Clear Button */}
+                    {formData.idnusvarekening > 0 && !isView && (
+                      <button
+                        type="button"
+                        onClick={clearRekeningSelection}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-[#96b0bc] hover:text-red-400 transition-colors"
+                      >
+                        <X size={16} />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Dropdown List */}
+                  {rekeningDropdownOpen && (
+                    <div className="absolute z-50 w-full mt-1 bg-white border border-[#e2e8f0] rounded-xl shadow-lg max-h-60 overflow-y-auto custom-scrollbar">
+                      {filteredRekenings.length > 0 ? (
+                        filteredRekenings.map((rekening) => (
+                          <div
+                            key={rekening.id}
+                            onClick={() => handleRekeningSelect(rekening)}
+                            className={`px-4 py-3 cursor-pointer hover:bg-cyan/5 transition-colors border-b border-[#f0f4f8] last:border-b-0 ${
+                              formData.idnusvarekening === rekening.id ? 'bg-cyan/10 font-bold' : ''
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1 min-w-0">
+                                <div className="text-sm font-medium text-[#0A3D62]">
+                                  {rekening.namarekening}
+                                </div>
+                                <div className="text-[11px] text-[#96b0bc]">
+                                  {rekening.norekening}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="px-4 py-6 text-center text-[#96b0bc] text-sm">
+                          Tidak ada rekening yang ditemukan
+                        </div>
+                      )}
+                      {rekeningList.length > 20 && !rekeningSearchTerm && (
+                        <div className="px-4 py-2 text-center text-[10px] text-[#96b0bc] bg-[#fafcfe] border-t border-[#f0f4f8]">
+                          Menampilkan 20 dari {rekeningList.length} rekening
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+                {errors.idnusvarekening && (
+                  <p className="text-[11px] text-red-500 font-bold">{errors.idnusvarekening}</p>
+                )}
+                {formData.idnusvarekening === 0 && (
+                  <p className="text-[10px] text-[#96b0bc]">
+                    💡 Ketik untuk mencari (No. Rekening atau Nama Rekening) • Menampilkan maksimal 20 hasil
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Baris 3: Tanggal Pinjaman & Tenor */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Tanggal Pinjaman */}
               <div className="space-y-2">
@@ -413,9 +590,10 @@ const PembiayaanForm = () => {
                   type="date"
                   value={formData.tanggalpinjaman}
                   onChange={(e) => setFormData({ ...formData, tanggalpinjaman: e.target.value })}
+                  disabled={isView}
                   className={`w-full px-4 py-3 bg-[#F0F4F8] border rounded-xl text-sm font-medium outline-none focus:bg-white focus:border-cyan/40 transition-all ${
                     errors.tanggalpinjaman ? 'border-red-400' : 'border-[#e2e8f0]'
-                  }`}
+                  } ${isView ? 'cursor-not-allowed bg-gray-100' : ''}`}
                 />
                 {errors.tanggalpinjaman && (
                   <p className="text-[11px] text-red-500 font-bold">{errors.tanggalpinjaman}</p>
@@ -430,9 +608,10 @@ const PembiayaanForm = () => {
                 <select
                   value={formData.tenor}
                   onChange={(e) => setFormData({ ...formData, tenor: parseInt(e.target.value) || 0 })}
+                  disabled={isView}
                   className={`w-full px-4 py-3 bg-[#F0F4F8] border rounded-xl text-sm font-medium outline-none focus:bg-white focus:border-cyan/40 transition-all ${
                     errors.tenor ? 'border-red-400' : 'border-[#e2e8f0]'
-                  }`}
+                  } ${isView ? 'cursor-not-allowed bg-gray-100' : ''}`}
                 >
                   {TENOR_OPTIONS.map((tenor) => (
                     <option key={tenor} value={tenor}>
@@ -446,7 +625,7 @@ const PembiayaanForm = () => {
               </div>
             </div>
 
-            {/* Baris 3: Kategori Barang & Nominal Pinjaman */}
+            {/* Baris 4: Kategori Barang & Nominal Pinjaman */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Kategori Barang */}
               <div className="space-y-2">
@@ -456,9 +635,10 @@ const PembiayaanForm = () => {
                 <select
                   value={formData.kategoribarang}
                   onChange={(e) => setFormData({ ...formData, kategoribarang: e.target.value })}
+                  disabled={isView}
                   className={`w-full px-4 py-3 bg-[#F0F4F8] border rounded-xl text-sm font-medium outline-none focus:bg-white focus:border-cyan/40 transition-all ${
                     errors.kategoribarang ? 'border-red-400' : 'border-[#e2e8f0]'
-                  }`}
+                  } ${isView ? 'cursor-not-allowed bg-gray-100' : ''}`}
                 >
                   <option value="">Pilih Kategori Barang</option>
                   {kategoriBarangList
@@ -474,24 +654,25 @@ const PembiayaanForm = () => {
                 )}
               </div>
 
-              {/* Nominal Pinjaman */}
+              {/* Nominal Pembelian */}
               <div className="space-y-2">
                 <label className="block text-[11px] font-bold uppercase tracking-widest text-[#5a7a8a]">
-                  Nominal Pinjaman <span className="text-red-500">*</span>
+                  Nominal Pembelian <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="number"
-                  value={formData.nominalpinjaman}
-                  onChange={(e) => setFormData({ ...formData, nominalpinjaman: parseFloat(e.target.value) || 0 })}
-                  placeholder="Masukkan nominal pinjaman"
+                  value={formData.nominalpembelian}
+                  onChange={(e) => setFormData({ ...formData, nominalpembelian: parseFloat(e.target.value) || 0 })}
+                  placeholder="Masukkan nominal pembelian"
                   min="0"
                   step="1000"
+                  disabled={isView}
                   className={`w-full px-4 py-3 bg-[#F0F4F8] border rounded-xl text-sm font-medium outline-none focus:bg-white focus:border-cyan/40 transition-all ${
-                    errors.nominalpinjaman ? 'border-red-400' : 'border-[#e2e8f0]'
-                  }`}
+                    errors.nominalpembelian ? 'border-red-400' : 'border-[#e2e8f0]'
+                  } ${isView ? 'cursor-not-allowed bg-gray-100' : ''}`}
                 />
-                {errors.nominalpinjaman && (
-                  <p className="text-[11px] text-red-500 font-bold">{errors.nominalpinjaman}</p>
+                {errors.nominalpembelian && (
+                  <p className="text-[11px] text-red-500 font-bold">{errors.nominalpembelian}</p>
                 )}
               </div>
             </div>
@@ -513,7 +694,7 @@ const PembiayaanForm = () => {
                     {isCalculating ? (
                       <span className="text-sm">Menghitung...</span>
                     ) : calculatedMargin !== null ? (
-                      <span>{calculatedMargin}%</span>
+                      <span>{Math.round(calculatedMargin)}%</span>
                     ) : (
                       <span className="text-[#96b0bc]">-</span>
                     )}
@@ -541,18 +722,18 @@ const PembiayaanForm = () => {
                 <div className="space-y-2 md:col-span-2">
                   <div className="flex items-center gap-2 text-[#5a7a8a] text-xs font-bold uppercase">
                     <Wallet size={14} />
-                    <span>Nominal Pembelian</span>
+                    <span>Nominal Pembiayaan</span>
                   </div>
                   <div className="text-3xl font-bold text-emerald-600">
                     {calculateNominalPembelian() > 0 ? formatCurrency(calculateNominalPembelian()) : '-'}
                   </div>
-                  {formData.nominalpinjaman > 0 && calculatedMargin !== null && (
+                  {formData.nominalpembelian > 0 && calculatedMargin !== null && (
                     <>
                       <p className="text-[11px] text-[#96b0bc]">
-                        Nominal Pinjaman ({formatCurrency(formData.nominalpinjaman)}) + Margin ({formatCurrency(formData.nominalpinjaman * (calculatedMargin / 100))})
+                        Nominal Pembelian ({formatCurrency(formData.nominalpembelian)}) + Margin ({formatCurrency(formData.nominalpembelian * (calculatedMargin / 100))})
                       </p>
                       <p className="text-[10px] text-[#96b0bc]">
-                        ✨ Margin {calculatedMargin.toFixed(2)}% dari nominal pinjaman
+                        ✨ Margin {Math.round(calculatedMargin)}% dari nominal pembelian
                       </p>
                       <p className="text-[10px] text-[#96b0bc]">
                         ✨ Dibulatkan ke atas ke kelipatan Rp 10.000
@@ -571,16 +752,18 @@ const PembiayaanForm = () => {
                 disabled={isLoading}
                 className="flex-1 px-6 py-3 border border-[#e2e8f0] rounded-xl text-[#5a7a8a] hover:bg-gray-50 transition-all text-sm font-bold uppercase tracking-wider"
               >
-                Batal
+                {isView ? 'Kembali' : 'Batal'}
               </button>
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="flex-1 px-6 py-3 bg-gradient-to-r from-[#0FA3B1] to-[#1ECAD3] text-white rounded-xl shadow-lg shadow-cyan/20 hover:brightness-105 transition-all text-sm font-bold uppercase tracking-wider flex items-center justify-center gap-2"
-              >
-                <Save size={16} />
-                {isLoading ? 'Menyimpan...' : isEdit ? 'Perbarui' : 'Simpan'}
-              </button>
+              {!isView && (
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="flex-1 px-6 py-3 bg-gradient-to-r from-[#0FA3B1] to-[#1ECAD3] text-white rounded-xl shadow-lg shadow-cyan/20 hover:brightness-105 transition-all text-sm font-bold uppercase tracking-wider flex items-center justify-center gap-2"
+                >
+                  <Save size={16} />
+                  {isLoading ? 'Menyimpan...' : isEdit ? 'Perbarui' : 'Simpan'}
+                </button>
+              )}
             </div>
           </form>
         </div>

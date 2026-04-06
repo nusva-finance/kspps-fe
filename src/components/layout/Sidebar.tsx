@@ -2,7 +2,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Wallet, ClipboardList,
   Handshake, Moon, BarChart3, Settings, LogOut,
-  ChevronLeft, Menu, UserCog, Percent, SlidersHorizontal, Package, CreditCard
+  ChevronLeft, Menu, UserCog, Percent, SlidersHorizontal, Package, CreditCard, FileSpreadsheet
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { cn } from '../../utils/cn';
@@ -23,11 +23,13 @@ const Sidebar = ({ isCollapsed, onToggle }: SidebarProps) => {
     { label: 'ANGGOTA & KYC', type: 'header' },
     { icon: <Users size={20} />, label: 'Anggota', path: '/members', badge: '12' },
     { label: 'KEUANGAN', type: 'header' },
-    { icon: <Wallet size={20} />, label: 'Simpanan', path: '/savings' },
+    { icon: <Wallet size={20} />, label: 'Simpanan', path: '/simpanan' },
+    { icon: <Wallet size={20} />, label: 'Mutasi Simpanan', path: '/savings' },
     { icon: <Handshake size={20} />, label: 'Pembiayaan', path: '/pembiayaan' },
     { label: 'SOSIAL', type: 'header' },
     { icon: <Moon size={20} />, label: 'ZISWAF', path: '/ziswaf' },
     { label: 'AKUNTANSI', type: 'header' },
+    { icon: <FileSpreadsheet size={20} />, label: 'Mutasi Rekening', path: '/mutasi-rekening' },
     { icon: <BarChart3 size={20} />, label: 'SHU & Laporan', path: '/shu' },
     { label: 'SETUP', type: 'header' },
     { icon: <Percent size={20} />, label: 'Margin', path: '/margins' },

@@ -10,6 +10,8 @@ import MemberForm from './pages/members/MemberForm'
 import Savings from './pages/savings/Savings'
 import SavingsNew from './pages/savings/SavingsNew'
 import SavingsForm from './pages/savings/SavingsForm'
+import Simpanan from './pages/simpanan/Simpanan'
+import SimpananForm from './pages/simpanan/SimpananForm'
 import Security from './pages/security/Security'
 import Margins from './pages/margins/Margins'
 import MarginForm from './pages/margins/MarginForm'
@@ -17,8 +19,10 @@ import KategoriBarang from './pages/kategori-barang/KategoriBarang'
 import KategoriBarangForm from './pages/kategori-barang/KategoriBarangForm'
 import Rekening from './pages/rekening/Rekening'
 import RekeningForm from './pages/rekening/RekeningForm'
+import MutasiRekening from './pages/rekening/MutasiRekening'
 import Pembiayaan from './pages/pembiayaan/Pembiayaan'
 import PembiayaanForm from './pages/pembiayaan/PembiayaanForm'
+import PembayaranEdit from './pages/pembiayaan/PembayaranEdit'
 
 function ProtectedLayout() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
@@ -64,10 +68,17 @@ function App() {
           <Route path="/savings/wajib" element={<Savings />} />
           <Route path="/savings/modal" element={<Savings />} />
 
+          {/* Simpanan - Daftar Transaksi */}
+          <Route path="/simpanan" element={<Simpanan />} />
+          <Route path="/simpanan/add" element={<SimpananForm />} />
+          <Route path="/simpanan/:id/edit" element={<SimpananForm />} />
+
           {/* Pembiayaan */}
           <Route path="/pembiayaan" element={<Pembiayaan />} />
           <Route path="/pembiayaan/add" element={<PembiayaanForm />} />
           <Route path="/pembiayaan/:id/edit" element={<PembiayaanForm />} />
+          <Route path="/pembiayaan/:id/view" element={<PembiayaanForm />} />
+          <Route path="/pembayaran-pembiayaan/:id/edit" element={<PembayaranEdit />} />
 
           {/* Security */}
           <Route path="/security" element={<Security />} />
@@ -86,6 +97,7 @@ function App() {
           <Route path="/rekening" element={<Rekening />} />
           <Route path="/rekening/add" element={<RekeningForm />} />
           <Route path="/rekening/:id/edit" element={<RekeningForm />} />
+          <Route path="/mutasi-rekening" element={<MutasiRekening />} />
         </Route>
 
         {/* Fallback */}

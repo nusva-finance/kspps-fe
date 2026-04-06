@@ -24,6 +24,20 @@ interface UpdateRekeningRequest {
   deskripsi?: string
 }
 
+interface MutasiTransaction {
+  idrekeningtransaction: number
+  tanggaltransaksi: string
+  nominaltransaction: number
+  transactiontype: string
+  tabletransaction: string
+  idtabletransaction: number
+}
+
+interface MutasiRekeningResponse {
+  opening_balance: number
+  transactions: MutasiTransaction[]
+}
+
 interface ApiResponse<T> {
   data?: T
   message?: string
@@ -40,6 +54,12 @@ const rekeningService = {
   // Get rekening by ID
   getRekeningById: async (id: number): Promise<ApiResponse<Rekening>> => {
     const response = await api.get(`/rekening/${id}`)
+    return response.data
+  },
+
+  // Get mutasi rekening
+  getMutasiRekening: async (id: number, dateFrom: string, dateTo: string): Promise<ApiResponse<MutasiRekeningResponse>> => {
+    const response = await api.get(`/rekening/${id}/mutasi?date_from=${dateFrom}&date_to=${dateTo}`)
     return response.data
   },
 
@@ -62,4 +82,4 @@ const rekeningService = {
 }
 
 export default rekeningService
-export { type Rekening, type CreateRekeningRequest, type UpdateRekeningRequest }
+export { type Rekening, type CreateRekeningRequest, type UpdateRekeningRequest, type MutasiTransaction, type MutasiRekeningResponse }

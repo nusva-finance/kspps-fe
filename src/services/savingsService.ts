@@ -9,6 +9,7 @@ export interface SavingsTransaction {
   amount: number;
   description: string;
   transaction_date: string;
+  rekening_id?: number; // ID dari nusva_rekening untuk mencatat ke rekening_transaction
 }
 
 export interface SavingType {
@@ -108,6 +109,47 @@ const savingsService = {
   },
 
   /**
+   * Mendapatkan semua transaksi (untuk halaman daftar simpanan)
+   */
+  getAllTransactions: async (params: { limit?: number; page?: number } = {}) => {
+    try {
+      const response = await api.get('/savings/transactions/all', { params });
+      return response.data;
+    } catch (error) {
+      console.error('❌ Error fetching all transactions:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Update transaksi simpanan
+   */
+  updateTransaction: async (id: number, data: Partial<SavingsTransaction>) => {
+    try {
+      console.log('📤 Updating savings transaction:', id, data);
+      const response = await api.put(`/savings/transactions/${id}`, data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Error updating transaction:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Hapus transaksi simpanan
+   */
+  deleteTransaction: async (id: number) => {
+    try {
+      console.log('📤 Deleting savings transaction:', id);
+      const response = await api.delete(`/savings/transactions/${id}`);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Error deleting transaction:', error);
+      throw error;
+    }
+  },
+
+  /**
    * Mendapatkan detail transaksi berdasarkan ID
    */
   getTransactionById: async (id: number) => {
@@ -129,6 +171,50 @@ const savingsService = {
       return response.data;
     } catch (error) {
       console.error('❌ Error fetching specific member balance:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Mendapatkan semua transaksi simpanan (untuk halaman daftar)
+   */
+  getAllTransactions: async (params: { page?: number; limit?: number; search?: string } = {}) => {
+    try {
+      const response = await api.get('/savings/transactions/all', { params });
+      console.log('✅ All transactions loaded:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Error fetching all transactions:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Update transaksi simpanan
+   */
+  updateTransaction: async (id: number, data: SavingsTransaction) => {
+    try {
+      console.log('📤 Updating savings transaction:', id, data);
+      const response = await api.put(`/savings/transactions/${id}`, data);
+      console.log('✅ Transaction updated:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Error updating transaction:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Hapus transaksi simpanan
+   */
+  deleteTransaction: async (id: number) => {
+    try {
+      console.log('🗑️ Deleting savings transaction:', id);
+      const response = await api.delete(`/savings/transactions/${id}`);
+      console.log('✅ Transaction deleted');
+      return response.data;
+    } catch (error) {
+      console.error('❌ Error deleting transaction:', error);
       throw error;
     }
   }

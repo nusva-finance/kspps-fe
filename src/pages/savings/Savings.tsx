@@ -104,7 +104,10 @@ const Savings = () => {
     const filteredMutasi = mutasiData.filter((t: any) => {
       const tDate = t.transaction_date.split('T')[0]; // Ambil YYYY-MM-DD
       return tDate >= startDate && tDate <= endDate;
-    })
+    }).sort((a: any, b: any) =>
+      // Sort ascending by date (oldest first)
+      new Date(a.transaction_date).getTime() - new Date(b.transaction_date).getTime()
+    )
 
     // 3. Masukkan hasil filter ke list tabel
     filteredMutasi.forEach((t: any) => {

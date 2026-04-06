@@ -1,9 +1,9 @@
 import api from './api'
 
 export interface Pembiayaan {
-  id: number
+  idpinjaman: number
   idmember: number
-  namaangota?: string
+  namaanggota?: string
   member_no?: string
   tipepinjaman: string
   tanggalpinjaman: string
@@ -13,6 +13,7 @@ export interface Pembiayaan {
   nominalpinjaman: number
   nominalpembelian: number
   tgljtangsuran1: string
+  totalpembayaran?: number
   created_at?: string
   updated_at?: string
 }
@@ -23,7 +24,8 @@ export interface CreatePembiayaanRequest {
   tanggalpinjaman: string
   kategoribarang: string
   tenor: number
-  nominalpinjaman: number
+  nominalpembelian: number
+  idnusvarekening: number
 }
 
 export interface UpdatePembiayaanRequest {
@@ -32,7 +34,7 @@ export interface UpdatePembiayaanRequest {
   tanggalpinjaman?: string
   kategoribarang?: string
   tenor?: number
-  nominalpinjaman?: number
+  nominalpembelian?: number
 }
 
 export interface ApiResponse<T> {

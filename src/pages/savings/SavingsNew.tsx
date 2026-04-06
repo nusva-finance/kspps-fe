@@ -92,7 +92,11 @@ const Savings = () => {
       }
 
       const response = await savingsService.getTransactions(params)
-      setTransactions(response.data || [])
+      // Sort transactions by date ascending (oldest first)
+      const sortedData = (response.data || []).sort((a: SavingsTransaction, b: SavingsTransaction) =>
+        new Date(a.transaction_date).getTime() - new Date(b.transaction_date).getTime()
+      )
+      setTransactions(sortedData)
     } catch (err: any) {
       setError('Gagal memuat transaksi: ' + err.message)
     } finally {

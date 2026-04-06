@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Search, RefreshCw, Wallet, Edit3, Trash2 } from 'lucide-react'
+import { Plus, Search, RefreshCw, Wallet, Edit3, Trash2, CreditCard, Receipt, X, Eye } from 'lucide-react'
 import Button from '../../components/ui/Button'
 import Table from '../../components/ui/Table'
 import Badge from '../../components/ui/Badge'
 import Modal from '../../components/ui/Modal'
 import { useModal } from '../../hooks/useModal'
 import pembiayaanService, { type Pembiayaan } from '../../services/pembiayaanService'
+import pembayaranPembiayaanService, { type PembayaranPembiayaan } from '../../services/pembayaranPembiayaanService'
+import PembayaranForm from './PembayaranForm'
 
 const PembiayaanList = () => {
   const navigate = useNavigate()
@@ -16,6 +18,13 @@ const PembiayaanList = () => {
   const [pembiayaanData, setPembiayaanData] = useState<Pembiayaan[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [pembiayaanToDelete, setPembiayaanToDelete] = useState<number | null>(null)
+
+  // State for Pembayaran
+  const [showPembayaranForm, setShowPembayaranForm] = useState(false)
+  const [selectedPembiayaan, setSelectedPembiayaan] = useState<Pembiayaan | null>(null)
+  const [pembayaranHistory, setPembayaranHistory] = useState<PembayaranPembiayaan[]>([])
+  const [isLoadingPembayaran, setIsLoadingPembayaran] = useState(false)
+  const [highlightedRowId, setHighlightedRowId] = useState<number | null>(null)
 
   const loadPembiayaan = async () => {
     setIsLoading(true)
@@ -73,6 +82,83 @@ const PembiayaanList = () => {
     )
   }
 
+  // Load pembayaran history for selected pembiayaan
+  const loadPembayaranHistory = async (idPinjaman: number) => {
+    setIsLoadingPembayaran(true)
+    try {
+      const response = await pembayaranPembiayaanService.getByPinjamanID(idPinjaman)
+      setPembayaranHistory(response.data || [])
+    } catch (error) {
+      console.error('Error loading pembayaran history:', error)
+      setPembayaranHistory([])
+    } finally {
+      setIsLoadingPembayaran(false)
+    }
+  }
+
+  // Handle row click to show pembayaran history
+  const handleRowClick = (pembiayaan: Pembiayaan) => {
+    // If clicking the same row, deselect it
+    if (selectedPembiayaan?.idpinjaman === pembiayaan.idpinjaman) {
+      setSelectedPembiayaan(null)
+      setPembayaranHistory([])
+      setHighlightedRowId(null)
+    } else {
+      setSelectedPembiayaan(pembiayaan)
+      setHighlightedRowId(pembiayaan.idpinjaman)
+      loadPembayaranHistory(pembiayaan.idpinjaman)
+    }
+  }
+
+  // Handle open pembayaran form
+  const handleOpenPembayaran = (pembiayaan: Pembiayaan) => {
+    setSelectedPembiayaan(pembiayaan)
+    setHighlightedRowId(pembiayaan.idpinjaman)
+    setShowPembayaranForm(true)
+    loadPembayaranHistory(pembiayaan.idpinjaman)
+  }
+
+  // Handle close pembayaran form
+  const handleClosePembayaran = () => {
+    setShowPembayaranForm(false)
+  }
+
+  // Handle successful pembayaran
+  const handlePembayaranSuccess = () => {
+    if (selectedPembiayaan) {
+      loadPembayaranHistory(selectedPembiayaan.idpinjaman)
+    }
+  }
+
+  // Handle delete pembayaran
+  const handleDeletePembayaran = async (id: number) => {
+    showConfirm(
+      'Konfirmasi',
+      'Hapus Pembayaran',
+      'Apakah Anda yakin ingin menghapus data pembayaran ini? Tindakan ini tidak dapat dibatalkan.',
+      [
+        { label: 'Batal', onClick: closeModal, variant: 'secondary' },
+        {
+          label: 'Hapus',
+          onClick: async () => {
+            try {
+              await pembayaranPembiayaanService.delete(id)
+              closeModal()
+              showSuccess('Berhasil', 'Pembayaran berhasil dihapus')
+              if (selectedPembiayaan) {
+                loadPembayaranHistory(selectedPembiayaan.idpinjaman)
+              }
+            } catch (error: any) {
+              console.error('Error deleting pembayaran:', error)
+              showSuccess('Gagal', error.response?.data?.error || 'Gagal menghapus pembayaran')
+            }
+          },
+          variant: 'danger'
+        },
+      ]
+    )
+  }
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('id-ID', {
       style: 'currency',
@@ -108,7 +194,7 @@ const PembiayaanList = () => {
     },
     {
       key: 'nominalpinjaman',
-      header: 'SALDO PINJAMAN',
+      header: 'N. PINJAMAN',
       render: (v: number) => <span className="font-bold text-[#0A3D62]">{formatCurrency(v)}</span>
     },
     {
@@ -128,8 +214,17 @@ const PembiayaanList = () => {
     },
     {
       key: 'nominalpembelian',
-      header: 'NOMINAL PEMBELIAN',
+      header: 'N. PEMBELIAN',
       render: (v: number) => <span className="font-bold text-emerald-600">{formatCurrency(v)}</span>
+    },
+    {
+      key: 'saldo',
+      header: 'SALDO',
+      render: (_: any, row: Pembiayaan) => {
+        const totalPembayaran = row.totalpembayaran || 0
+        const saldo = row.nominalpinjaman - totalPembayaran
+        return <span className="font-bold text-red-600">{formatCurrency(saldo)}</span>
+      }
     },
     {
       key: 'tgljtangsuran1',
@@ -141,22 +236,147 @@ const PembiayaanList = () => {
       header: 'AKSI',
       render: (_: any, row: Pembiayaan) => (
         <div className="flex gap-1">
+          {/* Tombol Pembayaran */}
           <button
-            onClick={() => navigate(`/pembiayaan/${row.id}/edit`)}
-            className="p-1.5 hover:bg-cyan/10 text-[#96b0bc] hover:text-cyan rounded-lg transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleOpenPembayaran(row);
+            }}
+            className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+            title="Pembayaran"
+          >
+            <CreditCard size={14} />
+          </button>
+
+          {/* Tombol View */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/pembiayaan/${row.idpinjaman}/view`);
+            }}
+            className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
+            title="Lihat Detail"
+          >
+            <Eye size={14} />
+          </button>
+
+          {/* Tombol Edit */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/pembiayaan/${row.idpinjaman}/edit`);
+            }}
+            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
             title="Edit"
           >
             <Edit3 size={14} />
           </button>
+
+          {/* Tombol Delete */}
           <button
-            onClick={() => confirmDelete(row.id)}
-            className="p-1.5 hover:bg-red/10 text-[#96b0bc] hover:text-red-400 rounded-lg transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!row.idpinjaman) {
+                console.error("ID Pinjaman tidak ditemukan di baris ini! Data:", row);
+                return;
+              }
+              confirmDelete(row.idpinjaman);
+            }}
+            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
             title="Hapus"
           >
             <Trash2 size={14} />
           </button>
         </div>
       ),
+    },
+  ]
+
+  // Columns for Pembayaran History Grid
+  const pembayaranColumns = [
+    {
+      key: 'idpembayaranpembiayaan',
+      header: 'ID',
+      render: (v: number) => <span className="font-mono text-xs">{v}</span>
+    },
+    {
+      key: 'tglpembayaran',
+      header: 'Tgl Pembayaran',
+      render: (v: string) => (
+        <span className="text-[#5a7a8a]">{formatDate(v)}</span>
+      )
+    },
+    {
+      key: 'nominalpembayaran',
+      header: 'Nominal Pembayaran',
+      render: (v: number) => (
+        <span className="font-bold text-[#0A3D62]">{formatCurrency(v)}</span>
+      )
+    },
+    {
+      key: 'nominalangsuran',
+      header: 'Nominal Angsuran',
+      render: (v: number) => (
+        <span className="text-[#5a7a8a]">{formatCurrency(v)}</span>
+      )
+    },
+    {
+      key: 'angsuranke',
+      header: 'Angsuran Ke',
+      render: (v: number) => (
+        <Badge variant="info">{v}</Badge>
+      )
+    },
+    {
+      key: 'tgljtangsuran',
+      header: 'Tgl Jt Angsuran',
+      render: (v: string) => (
+        <span className="text-[#5a7a8a]">{formatDate(v)}</span>
+      )
+    },
+    {
+      key: 'actions',
+      header: 'AKSI',
+      render: (_: any, row: PembayaranPembiayaan) => {
+        // Check if created_at is today
+        const createdAt = row.created_at ? new Date(row.created_at) : null
+        const today = new Date()
+        const isToday = createdAt &&
+          createdAt.getDate() === today.getDate() &&
+          createdAt.getMonth() === today.getMonth() &&
+          createdAt.getFullYear() === today.getFullYear()
+
+        return (
+          <div className="flex gap-1">
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                if (selectedPembiayaan) {
+                  navigate(`/pembayaran-pembiayaan/${row.idpembayaranpembiayaan}/edit?idpinjaman=${selectedPembiayaan.idpinjaman}`)
+                }
+              }}
+              disabled={!isToday}
+              className={`p-2 rounded-lg transition-colors ${isToday ? 'text-blue-600 hover:bg-blue-50' : 'text-gray-300 cursor-not-allowed'}`}
+              title={isToday ? 'Edit Pembayaran' : 'Hanya bisa edit di hari yang sama'}
+            >
+              <Edit3 size={14} />
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                if (isToday) {
+                  handleDeletePembayaran(row.idpembayaranpembiayaan)
+                }
+              }}
+              disabled={!isToday}
+              className={`p-2 rounded-lg transition-colors ${isToday ? 'text-red-600 hover:bg-red-50' : 'text-gray-300 cursor-not-allowed'}`}
+              title={isToday ? 'Hapus Pembayaran' : 'Hanya bisa hapus di hari yang sama'}
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
+        )
+      }
     },
   ]
 
@@ -223,6 +443,8 @@ const PembiayaanList = () => {
             data={filteredData}
             isLoading={isLoading}
             emptyMessage="Tidak ada data pembiayaan yang ditemukan."
+            onRowClick={handleRowClick}
+            rowClassName={(row) => row.idpinjaman === highlightedRowId ? 'bg-cyan/10' : ''}
           />
         </div>
 
@@ -232,6 +454,66 @@ const PembiayaanList = () => {
             Total {filteredData.length} Pembiayaan Terdaftar
           </span>
         </div>
+      </div>
+
+      {/* Payment History Section */}
+      <div className="bg-white rounded-2xl shadow-sm border border-cyan/20 overflow-hidden">
+        <div className="p-4 border-b border-[#f0f4f8] flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-cyan/10 rounded-lg flex items-center justify-center text-cyan">
+              <Receipt size={16} />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-navy">Riwayat Pembayaran</h3>
+              {selectedPembiayaan ? (
+                <p className="text-xs text-gray">
+                  {selectedPembiayaan.namaanggota} - No. {selectedPembiayaan.member_no}
+                </p>
+              ) : (
+                <p className="text-xs text-gray">Klik baris pembiayaan di atas untuk melihat riwayat pembayaran</p>
+              )}
+            </div>
+          </div>
+          {selectedPembiayaan && (
+            <button
+              onClick={() => {
+                setSelectedPembiayaan(null)
+                setPembayaranHistory([])
+                setHighlightedRowId(null)
+              }}
+              className="p-2 text-gray hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+              title="Tutup"
+            >
+              <X size={16} />
+            </button>
+          )}
+        </div>
+
+        {selectedPembiayaan ? (
+          <>
+            <div className="overflow-x-auto">
+              <Table
+                columns={pembayaranColumns}
+                data={pembayaranHistory}
+                isLoading={isLoadingPembayaran}
+                emptyMessage="Belum ada data pembayaran"
+              />
+            </div>
+
+            <div className="px-6 py-3 bg-[#fafcfe] border-t border-[#f0f4f8]">
+              <span className="text-[11px] text-[#96b0bc] font-bold uppercase tracking-widest">
+                Total {pembayaranHistory.length} Pembayaran
+              </span>
+            </div>
+          </>
+        ) : (
+          <div className="flex items-center justify-center py-12 text-gray">
+            <div className="text-center">
+              <Receipt size={32} className="mx-auto mb-2 text-gray/30" />
+              <p className="text-sm">Pilih pembiayaan untuk melihat riwayat pembayaran</p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Beautiful Modal */}
@@ -245,6 +527,14 @@ const PembiayaanList = () => {
           onClose={closeModal}
         />
       )}
+
+      {/* Pembayaran Form Modal */}
+      <PembayaranForm
+        isOpen={showPembayaranForm}
+        onClose={handleClosePembayaran}
+        pembiayaan={selectedPembiayaan}
+        onSuccess={handlePembayaranSuccess}
+      />
     </div>
   )
 }
