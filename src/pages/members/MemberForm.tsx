@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Save, User as UserIcon, Mail, Phone } from 'lucide-react'
 import Button from '../../components/ui/Button'
 import memberService from '../../services/memberService'
+import CurrencyInput from '../../components/ui/CurrencyInput'
 
 interface MemberFormData {
   member_no: string
@@ -36,6 +37,7 @@ interface MemberFormData {
   // Bank Information
   bank_account_no?: string
   bank_name?: string
+  qardhassanplafon: number
 }
 
 const MemberForm = () => {
@@ -75,6 +77,7 @@ const MemberForm = () => {
     // Bank Information
     bank_account_no: '',
     bank_name: '',
+    qardhassanplafon: 0,
   })
 
   const [errors, setErrors] = useState<Partial<MemberFormData>>({})
@@ -129,6 +132,7 @@ const MemberForm = () => {
               // Bank Information
               bank_account_no: member.bank_account_no || '',
               bank_name: member.bank_name || '',
+              qardhassanplafon: member.qardhassanplafon || 0,
             })
             console.log('✅ Form data set successfully with:', member.full_name)
           }
@@ -194,6 +198,7 @@ const MemberForm = () => {
         // Bank Information
         bank_account_no: formData.bank_account_no || undefined,
         bank_name: formData.bank_name || undefined,
+        qardhassanplafon: formData.qardhassanplafon,
       }
 
       // API call based on mode (create or update)
@@ -648,6 +653,37 @@ const MemberForm = () => {
                 </div>
               </div>
             </div>
+
+            {/* Batas Pinjaman / Limit Kredit */}
+            <div className="bg-white rounded-xl border border-cyan/20 p-6">
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center">
+                  <span className="text-amber-600 font-bold text-lg">Rp</span>
+                </div>
+                <h2 className="font-semibold text-navy">Batas Pinjaman</h2>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-medium text-navy mb-1">
+                    Plafon Qard Hassan
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray text-sm font-bold">Rp</span>
+                      <CurrencyInput
+                        value={formData.qardhassanplafon}
+                        onChange={(val) => setFormData({ ...formData, qardhassanplafon: val })}
+                        className="w-full pl-10 pr-4 py-2 border border-cyan/30 rounded-lg text-sm font-bold focus:outline-none focus:ring-2 focus:ring-cyan/30 text-amber-600"
+                        placeholder="0"
+                      />
+                  </div>
+                  <p className="text-[10px] text-gray mt-1 leading-tight">
+                    *Kosongkan atau isi 0 jika anggota tidak memiliki batas pinjaman (Unlimited).
+                  </p>
+                </div>
+              </div>
+            </div>
+          
+
           </div>
 
           {/* Kolom Kanan - Status & Aksi */}

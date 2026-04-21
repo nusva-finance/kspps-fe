@@ -23,6 +23,8 @@ import MutasiRekening from './pages/rekening/MutasiRekening'
 import Pembiayaan from './pages/pembiayaan/Pembiayaan'
 import PembiayaanForm from './pages/pembiayaan/PembiayaanForm'
 import PembayaranEdit from './pages/pembiayaan/PembayaranEdit'
+import QardHassanList from './pages/qardhassan/QardHassanList'
+import QardHassanForm from './pages/qardhassan/QardHassanForm'
 
 function ProtectedLayout() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
@@ -79,6 +81,12 @@ function App() {
           <Route path="/pembiayaan/:id/edit" element={<PembiayaanForm />} />
           <Route path="/pembiayaan/:id/view" element={<PembiayaanForm />} />
           <Route path="/pembayaran-pembiayaan/:id/edit" element={<PembayaranEdit />} />
+
+          {/* --- QARD HASSAN --- */}
+          <Route path="/qardhassan" element={<QardHassanList />} />
+          <Route path="/qardhassan/add" element={<QardHassanForm />} />
+          <Route path="/qardhassan/:id/edit" element={<QardHassanForm />} />
+          <Route path="/qardhassan/:id/view" element={<QardHassanForm />} />
 
           {/* Security */}
           <Route path="/security" element={<Security />} />

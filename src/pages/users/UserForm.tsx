@@ -126,6 +126,11 @@ const UserForm = () => {
           roles: formData.roles,
           is_active: formData.is_active,
         }
+
+        if (formData.password) {
+           updateData.password = formData.password
+      }
+
         await userService.updateUser(parseInt(id), updateData)
         console.log('✅ User updated successfully')
       } else {

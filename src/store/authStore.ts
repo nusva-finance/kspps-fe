@@ -15,7 +15,7 @@ interface AuthState {
   token: string | null
   user: User | null
   isAuthenticated: boolean
-  // Tambahkan fungsi login di sini
+
   login: (username: string, password: string) => Promise<boolean>
   setAuth: (token: string, user: User) => void
   logout: () => void

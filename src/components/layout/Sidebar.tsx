@@ -2,10 +2,12 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Wallet, ClipboardList,
   Handshake, Moon, BarChart3, Settings, LogOut,
-  ChevronLeft, Menu, UserCog, Percent, SlidersHorizontal, Package, CreditCard, FileSpreadsheet
+  ChevronLeft, Menu, UserCog, Percent, SlidersHorizontal, 
+  Package, CreditCard, FileSpreadsheet, Heart, Shield
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { cn } from '../../utils/cn';
+import HasPermission from '../ui/HasPermission'; // <-- IMPORT COMPONENT AJAIB KITA
 
 interface SidebarProps {
   isCollapsed: boolean;
@@ -17,26 +19,35 @@ const Sidebar = ({ isCollapsed, onToggle }: SidebarProps) => {
   const location = useLocation();
   const logout = useAuthStore((state) => state.logout);
 
+  // TAMBAHKAN properti 'permission' di setiap menu yang butuh diamankan
   const menuItems = [
     { label: 'UTAMA', type: 'header' },
-    { icon: <LayoutDashboard size={20} />, label: 'Dashboard', path: '/dashboard' },
+    { icon: <LayoutDashboard size={20} />, label: 'Dashboard', path: '/dashboard', permission: 'dashboard.view' },
+    
     { label: 'ANGGOTA & KYC', type: 'header' },
-    { icon: <Users size={20} />, label: 'Anggota', path: '/members', badge: '12' },
+    { icon: <Users size={20} />, label: 'Anggota', path: '/members', badge: '12', permission: 'member.view' },
+    
     { label: 'KEUANGAN', type: 'header' },
-    { icon: <Wallet size={20} />, label: 'Simpanan', path: '/simpanan' },
-    { icon: <Wallet size={20} />, label: 'Mutasi Simpanan', path: '/savings' },
-    { icon: <Handshake size={20} />, label: 'Pembiayaan', path: '/pembiayaan' },
+    { icon: <Wallet size={20} />, label: 'Simpanan', path: '/simpanan', permission: 'saving.view' },
+    { icon: <Wallet size={20} />, label: 'Mutasi Simpanan', path: '/savings', permission: 'saving.view' },
+    { icon: <Handshake size={20} />, label: 'Pembiayaan', path: '/pembiayaan', permission: 'pembiayaan.view' },
+    { icon: <Heart size={20} />, label: 'Qard Hassan', path: '/qardhassan', permission: 'qardhassan.view' },
+    
     { label: 'SOSIAL', type: 'header' },
-    { icon: <Moon size={20} />, label: 'ZISWAF', path: '/ziswaf' },
+    { icon: <Moon size={20} />, label: 'ZISWAF', path: '/ziswaf' }, // Misal ziswaf belum ada permission, biarkan kosong
+    
     { label: 'AKUNTANSI', type: 'header' },
-    { icon: <FileSpreadsheet size={20} />, label: 'Mutasi Rekening', path: '/mutasi-rekening' },
+    { icon: <FileSpreadsheet size={20} />, label: 'Mutasi Rekening', path: '/mutasi-rekening', permission: 'rekening.mutasi' },
     { icon: <BarChart3 size={20} />, label: 'SHU & Laporan', path: '/shu' },
+    
     { label: 'SETUP', type: 'header' },
-    { icon: <Percent size={20} />, label: 'Margin', path: '/margins' },
-    { icon: <Package size={20} />, label: 'Kategori Barang', path: '/kategori-barang' },
-    { icon: <CreditCard size={20} />, label: 'Rekening', path: '/rekening' },
+    { icon: <Percent size={20} />, label: 'Margin', path: '/margins', permission: 'margin.view' },
+    { icon: <Package size={20} />, label: 'Kategori Barang', path: '/kategori-barang', permission: 'kategori.view' },
+    { icon: <CreditCard size={20} />, label: 'Rekening', path: '/rekening', permission: 'rekening.view' },
+    
     { label: 'SISTEM', type: 'header' },
-    { icon: <UserCog size={20} />, label: 'User Admin', path: '/users' }, // MENU USER DIMUNCULKAN LAGI
+    { icon: <UserCog size={20} />, label: 'User Admin', path: '/users', permission: 'user.view' },
+    { icon: <Shield size={20} />, label: 'Pengaturan Akses', path: '/security', permission: 'security.view' },
     { icon: <Settings size={20} />, label: 'Pengaturan', path: '/settings' },
   ];
 
@@ -103,11 +114,11 @@ const Sidebar = ({ isCollapsed, onToggle }: SidebarProps) => {
             ) : <div key={idx} className="h-4" />;
           }
 
-          const isActive = location.pathname === item.path;
+          const isActive = location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path || ''));
 
-          return (
+          // ISI MENU
+          const menuItemContent = (
             <div
-              key={idx}
               onClick={() => navigate(item.path || '/')}
               title={isCollapsed ? item.label : ''}
               className={cn(
@@ -145,6 +156,18 @@ const Sidebar = ({ isCollapsed, onToggle }: SidebarProps) => {
               )}
             </div>
           );
+
+          // LOGIKA RBAC: Kalau menu punya permission, bungkus dengan HasPermission!
+          if (item.permission) {
+            return (
+              <HasPermission key={idx} required={item.permission}>
+                {menuItemContent}
+              </HasPermission>
+            );
+          }
+
+          // Kalau gak ada permission (menu bebas), render langsung
+          return <div key={idx}>{menuItemContent}</div>;
         })}
       </nav>
 

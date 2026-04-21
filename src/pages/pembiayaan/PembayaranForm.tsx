@@ -3,6 +3,7 @@ import { X, Save, User, CreditCard, Calculator, Calendar, Loader2 } from 'lucide
 import Button from '../../components/ui/Button'
 import rekeningService from '../../services/rekeningService'
 import pembayaranPembiayaanService, { type CreatePembayaranRequest } from '../../services/pembayaranPembiayaanService'
+import CurrencyInput from '../../components/ui/CurrencyInput'
 
 interface Rekening {
   id: number
@@ -275,14 +276,10 @@ const PembayaranForm = ({ isOpen, onClose, pembiayaan, onSuccess }: PembayaranFo
             </label>
             <div className="relative">
               <span className="absolute left-3 top-2.5 text-gray text-sm">Rp</span>
-              <input
-                type="text"
-                value={nominalPembayaran > 0 ? nominalPembayaran.toLocaleString('id-ID') : ''}
-                onChange={(e) => {
-                  const value = e.target.value.replace(/[^0-9]/g, '')
-                  setNominalPembayaran(parseInt(value) || 0)
-                }}
-                className="w-full pl-10 pr-4 py-2.5 border border-cyan/30 rounded-lg text-sm focus:ring-2 focus:ring-cyan/30 outline-none"
+              <CurrencyInput
+                value={nominalPembayaran}
+                onChange={(val) => setNominalPembayaran(val)}
+                className="w-full pl-10 pr-4 py-2.5 border border-cyan/30 rounded-lg text-sm font-bold text-emerald-600 focus:ring-2 focus:ring-cyan/30 outline-none"
                 placeholder="0"
               />
             </div>

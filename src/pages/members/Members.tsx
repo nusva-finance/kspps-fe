@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef  } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Search, Download, RefreshCw, Users, Edit3 } from 'lucide-react'
+import { Plus, Search, Download, RefreshCw, Users, Edit3, Upload } from 'lucide-react'
 import * as XLSX from 'xlsx' // Import library Excel
 import Button from '../../components/ui/Button'
 import Table from '../../components/ui/Table'
@@ -35,6 +35,35 @@ const Members = () => {
   const [memberData, setMemberData] = useState<Member[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [totalMembers, setTotalMembers] = useState(0)
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isImporting, setIsImporting] = useState(false);
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    setIsImporting(true);
+    try {
+      // Pastikan memberService.importMembers sudah didefinisikan di service Anda
+      const res = await memberService.importMembers(formData); 
+      alert(`Import Berhasil! \nInserted: ${res.data.inserted} \nUpdated: ${res.data.updated}`);
+      loadMembers(); // Refresh data tabel
+    } catch (error: any) {
+      console.error("Import Error:", error);
+      alert("Gagal mengimport data. Pastikan format file sesuai.");
+    } finally {
+      setIsImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
 
   const loadMembers = async () => {
     setIsLoading(true)
@@ -177,6 +206,27 @@ const Members = () => {
             >
               <RefreshCw size={14} className={`${isLoading ? 'animate-spin' : ''} md:mr-2`} />
               <span className="hidden md:inline text-[11px] font-bold uppercase">Refresh</span>
+            </button>
+
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              onChange={handleFileChange} 
+              accept=".xlsx, .xls" 
+              className="hidden" 
+            />
+            
+            <button 
+              onClick={handleImportClick}
+              disabled={isImporting}
+              className="flex items-center justify-center h-10 w-10 md:w-auto md:px-4 border border-cyan/20 bg-cyan/5 rounded-xl text-cyan hover:bg-cyan/10 transition-all shrink-0"
+            >
+              {isImporting ? (
+                <RefreshCw size={14} className="animate-spin md:mr-2" />
+              ) : (
+                <Upload size={14} className="md:mr-2" />
+              )}
+              <span className="hidden md:inline text-[11px] font-bold uppercase">Import</span>
             </button>
 
             {/* TOMBOL EXCEL (AKTIF) */}

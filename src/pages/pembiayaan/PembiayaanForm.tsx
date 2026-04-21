@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { ArrowLeft, Save, Wallet, Calculator, Calendar, Percent, Search, X, ChevronDown } from 'lucide-react'
 import Button from '../../components/ui/Button'
@@ -10,6 +10,9 @@ import kategoriBarangService from '../../services/kategoriBarangService'
 import rekeningService, { type Rekening } from '../../services/rekeningService'
 import type { Member } from '../../services/memberService'
 import type { KategoriBarang } from '../../services/kategoriBarangService'
+import CurrencyInput from '../../components/ui/CurrencyInput'
+// Tambahkan useCallback ke dalam daftar import dari 'react'
+
 
 interface PembiayaanFormData {
   idmember: number
@@ -45,6 +48,10 @@ const PembiayaanForm = () => {
     idnusvarekening: 0,
   })
 
+  // Letakkan di bawah state formData (sekitar baris 60-an)
+  const [marginPreview, setMarginPreview] = useState(0)
+  const [nominalPembiayaan, setNominalPembiayaan] = useState(0)  
+
   const [errors, setErrors] = useState<Partial<PembiayaanFormData>>({})
   const [isLoading, setIsLoading] = useState(false)
   const [members, setMembers] = useState<Member[]>([])
@@ -63,6 +70,8 @@ const PembiayaanForm = () => {
   const [rekeningSearchTerm, setRekeningSearchTerm] = useState('')
   const [filteredRekenings, setFilteredRekenings] = useState<Rekening[]>([])
   const rekeningDropdownRef = useRef<HTMLDivElement>(null)
+
+
 
   const loadMembers = async () => {
     try {
@@ -138,6 +147,8 @@ const PembiayaanForm = () => {
     loadRekenings()
   }, [])
 
+
+
   // Handle click outside to close dropdown
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -152,6 +163,8 @@ const PembiayaanForm = () => {
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
+
+
 
   // Filter members based on search term
   useEffect(() => {
@@ -203,30 +216,6 @@ const PembiayaanForm = () => {
     }
   }, [rekeningSearchTerm, rekeningList])
 
-  // Calculate margin when category or tenor changes
-  useEffect(() => {
-    const calculateMargin = async () => {
-      if (formData.kategoribarang && formData.tenor > 0) {
-        setIsCalculating(true)
-        try {
-          const response = await pembiayaanService.getMargin(formData.kategoribarang, formData.tenor)
-          if (response && response.data) {
-            setCalculatedMargin(response.data.margin)
-          } else {
-            setCalculatedMargin(null)
-          }
-        } catch (error) {
-          console.error('Gagal mengambil margin:', error)
-          setCalculatedMargin(null)
-        } finally {
-          setIsCalculating(false)
-        }
-      }
-    }
-
-    const timeoutId = setTimeout(calculateMargin, 500)
-    return () => clearTimeout(timeoutId)
-  }, [formData.kategoribarang, formData.tenor])
 
   // Handler untuk member search dropdown
   const handleMemberSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -365,6 +354,35 @@ const PembiayaanForm = () => {
     }
     return '-'
   }
+
+  // Letakkan di bagian atas (sebelum loadMembers)
+  const runCalculation = useCallback(async () => {
+      // 1. Validasi Input
+      if (!formData.kategoribarang || !formData.tenor || formData.nominalpembelian <= 0) {
+          setCalculatedMargin(null);
+          return;
+      }
+
+      setIsCalculating(true);
+      try {
+          const res = await pembiayaanService.getMargin(formData.kategoribarang, formData.tenor);
+          // Pastikan mengambil data sesuai struktur response backend Anda
+          const mRate = res.data?.data?.margin ?? res.data?.margin ?? 0;
+          
+          // Simpan hasil ke state yang dipakai oleh UI di bawah
+          setCalculatedMargin(mRate);
+      } catch (error) {
+          console.error('Error saat mengambil margin:', error);
+          setCalculatedMargin(null);
+      } finally {
+          setIsCalculating(false);
+      }
+  }, [formData.kategoribarang, formData.tenor, formData.nominalpembelian]);
+
+  // Panggil otomatis
+  useEffect(() => {
+      runCalculation();
+  }, [runCalculation]);
 
   return (
     <div className="space-y-6 font-sans animate-in fade-in duration-500">
@@ -659,21 +677,18 @@ const PembiayaanForm = () => {
                 <label className="block text-[11px] font-bold uppercase tracking-widest text-[#5a7a8a]">
                   Nominal Pembelian <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="number"
-                  value={formData.nominalpembelian}
-                  onChange={(e) => setFormData({ ...formData, nominalpembelian: parseFloat(e.target.value) || 0 })}
-                  placeholder="Masukkan nominal pembelian"
-                  min="0"
-                  step="1000"
-                  disabled={isView}
-                  className={`w-full px-4 py-3 bg-[#F0F4F8] border rounded-xl text-sm font-medium outline-none focus:bg-white focus:border-cyan/40 transition-all ${
-                    errors.nominalpembelian ? 'border-red-400' : 'border-[#e2e8f0]'
-                  } ${isView ? 'cursor-not-allowed bg-gray-100' : ''}`}
-                />
-                {errors.nominalpembelian && (
-                  <p className="text-[11px] text-red-500 font-bold">{errors.nominalpembelian}</p>
-                )}
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray text-sm font-bold">Rp</span>
+                  <CurrencyInput
+                    value={formData.nominalpembelian}
+                    onChange={(val) => setFormData({ ...formData, nominalpembelian: val })}
+                    placeholder="0"
+                    disabled={isView}
+                    className={`w-full pl-12 pr-4 py-3 bg-[#F0F4F8] border rounded-xl text-sm font-bold text-emerald-600 outline-none focus:bg-white focus:border-cyan/40 transition-all ${
+                      errors.nominalpembelian ? 'border-red-400' : 'border-[#e2e8f0]'
+                    } ${isView ? 'cursor-not-allowed bg-gray-100' : ''}`}
+                  />
+                </div>
               </div>
             </div>
 

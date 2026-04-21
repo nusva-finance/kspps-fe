@@ -11,9 +11,10 @@ import pembayaranPembiayaanService, { type PembayaranPembiayaan } from '../../se
 import PembayaranForm from './PembayaranForm'
 
 const PembiayaanList = () => {
-  const navigate = useNavigate()
-  const { modal, showSuccess, showConfirm, closeModal } = useModal()
 
+  const navigate = useNavigate()
+
+  const { modal, showSuccess, showConfirm, showWarning, closeModal } = useModal()
   const [searchTerm, setSearchTerm] = useState('')
   const [pembiayaanData, setPembiayaanData] = useState<Pembiayaan[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -69,18 +70,6 @@ const PembiayaanList = () => {
     }
   }
 
-  const confirmDelete = (id: number) => {
-    setPembiayaanToDelete(id)
-    showConfirm(
-      'Konfirmasi',
-      'Hapus Pembiayaan',
-      'Apakah Anda yakin ingin menghapus data pembiayaan ini? Tindakan ini tidak dapat dibatalkan.',
-      [
-        { label: 'Batal', onClick: closeModal, variant: 'secondary' },
-        { label: 'Hapus', onClick: () => handleDelete(id), variant: 'danger' },
-      ]
-    )
-  }
 
   // Load pembayaran history for selected pembiayaan
   const loadPembayaranHistory = async (idPinjaman: number) => {
@@ -131,12 +120,12 @@ const PembiayaanList = () => {
   }
 
   // Handle delete pembayaran
+  // Perbaikan 1: Hapus parameter 'Konfirmasi' agar actions terbaca
   const handleDeletePembayaran = async (id: number) => {
     showConfirm(
-      'Konfirmasi',
-      'Hapus Pembayaran',
-      'Apakah Anda yakin ingin menghapus data pembayaran ini? Tindakan ini tidak dapat dibatalkan.',
-      [
+      'Hapus Pembayaran', // Parameter 1: Title
+      'Apakah Anda yakin ingin menghapus data pembayaran ini? Tindakan ini tidak dapat dibatalkan.', // Parameter 2: Message
+      [ // Parameter 3: Actions Array
         { label: 'Batal', onClick: closeModal, variant: 'secondary' },
         {
           label: 'Hapus',
@@ -154,7 +143,20 @@ const PembiayaanList = () => {
             }
           },
           variant: 'danger'
-        },
+        }
+      ]
+    )
+  }
+
+  
+  const confirmDelete = (id: number) => {
+    setPembiayaanToDelete(id)
+    showConfirm(
+      'Hapus Pembiayaan',
+      'Apakah Anda yakin ingin menghapus data pembiayaan ini? Tindakan ini tidak dapat dibatalkan.',
+      [
+        { label: 'Batal', onClick: closeModal, variant: 'secondary' },
+        { label: 'Hapus', onClick: () => handleDelete(id), variant: 'danger' },
       ]
     )
   }
@@ -234,61 +236,76 @@ const PembiayaanList = () => {
     {
       key: 'actions',
       header: 'AKSI',
-      render: (_: any, row: Pembiayaan) => (
-        <div className="flex gap-1">
-          {/* Tombol Pembayaran */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleOpenPembayaran(row);
-            }}
-            className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
-            title="Pembayaran"
-          >
-            <CreditCard size={14} />
-          </button>
+      render: (_: any, row: Pembiayaan) => {
+        // Variabel ini HARUS berada di dalam kurung kurawal render sebelum 'return'
+        const hasPayment = (row.totalpembayaran || 0) > 0;
 
-          {/* Tombol View */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              navigate(`/pembiayaan/${row.idpinjaman}/view`);
-            }}
-            className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
-            title="Lihat Detail"
-          >
-            <Eye size={14} />
-          </button>
+        return (
+          <div className="flex gap-1">
+            {/* Tombol Pembayaran (Tetap aktif) */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleOpenPembayaran(row);
+              }}
+              className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+              title="Pembayaran"
+            >
+              <CreditCard size={14} />
+            </button>
 
-          {/* Tombol Edit */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              navigate(`/pembiayaan/${row.idpinjaman}/edit`);
-            }}
-            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-            title="Edit"
-          >
-            <Edit3 size={14} />
-          </button>
+            {/* Tombol View (Tetap aktif) */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(`/pembiayaan/${row.idpinjaman}/view`);
+              }}
+              className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
+              title="Lihat Detail"
+            >
+              <Eye size={14} />
+            </button>
 
-          {/* Tombol Delete */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              if (!row.idpinjaman) {
-                console.error("ID Pinjaman tidak ditemukan di baris ini! Data:", row);
-                return;
-              }
-              confirmDelete(row.idpinjaman);
-            }}
-            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-            title="Hapus"
-          >
-            <Trash2 size={14} />
-          </button>
-        </div>
-      ),
+            {/* Tombol Edit (Terkunci jika ada pembayaran) */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (hasPayment) {
+                  showWarning('Akses Ditolak', 'Pembiayaan yang sudah memiliki riwayat pembayaran tidak dapat diedit.');
+                  return;
+                }
+                navigate(`/pembiayaan/${row.idpinjaman}/edit`);
+              }}
+              disabled={hasPayment}
+              className={`p-2 rounded-lg transition-colors ${hasPayment ? 'text-gray-300 cursor-not-allowed' : 'text-blue-600 hover:bg-blue-50'}`}
+              title={hasPayment ? "Tidak bisa diedit (sudah ada pembayaran)" : "Edit"}
+            >
+              <Edit3 size={14} />
+            </button>
+
+            {/* Tombol Delete (Terkunci jika ada pembayaran) */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!row.idpinjaman) {
+                  console.error("ID Pinjaman tidak ditemukan di baris ini! Data:", row);
+                  return;
+                }
+                if (hasPayment) {
+                  showWarning('Akses Ditolak', 'Pembiayaan yang sudah memiliki riwayat pembayaran tidak dapat dihapus.');
+                  return;
+                }
+                confirmDelete(row.idpinjaman);
+              }}
+              disabled={hasPayment}
+              className={`p-2 rounded-lg transition-colors ${hasPayment ? 'text-gray-300 cursor-not-allowed' : 'text-red-600 hover:bg-red-50'}`}
+              title={hasPayment ? "Tidak bisa dihapus (sudah ada pembayaran)" : "Hapus"}
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
+        ); // <-- Pastikan ada titik koma atau penutup return di sini
+      },
     },
   ]
 
@@ -334,6 +351,16 @@ const PembiayaanList = () => {
         <span className="text-[#5a7a8a]">{formatDate(v)}</span>
       )
     },
+    {
+      key: 'rekening',
+      header: 'Rekening',
+      render: (_: any, row: PembayaranPembiayaan) => (
+        <div className="flex flex-col min-w-[120px]">
+          <span className="text-xs font-bold text-navy">{row.namarekening || '-'}</span>
+          <span className="text-[10px] text-gray">{row.norekening || ''}</span>
+        </div>
+      )
+    },    
     {
       key: 'actions',
       header: 'AKSI',

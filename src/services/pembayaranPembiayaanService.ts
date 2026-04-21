@@ -17,6 +17,10 @@ export interface PembayaranPembiayaan {
   created_by?: string
   updated_at?: string
   updated_by?: string
+
+  idnusvarekening?: number
+  namarekening?: string
+  norekening?: string
 }
 
 export interface CreatePembayaranRequest {

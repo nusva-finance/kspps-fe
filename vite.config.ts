@@ -13,8 +13,8 @@ export default defineConfig({
 
     proxy: {
       '/api': {
-        //target: 'http://localhost:8080',
-        target : 'https://married-same-runs-ruth.trycloudflare.com',
+        target: 'http://localhost:8080',
+        //target : 'https://married-same-runs-ruth.trycloudflare.com',
         changeOrigin: true,
       },
     },
